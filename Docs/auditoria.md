@@ -101,7 +101,7 @@ Aderência a padrões do ecossistema Web3
 
 ## 4. Resumo de conformidade
 
-| Item | Status |
+| Item | Status ok |
 |------|--------|
 | Solidity ^0.8.x | ✅ |
 | OpenZeppelin (ERC-20, ERC-721, Ownable) | ✅ |
