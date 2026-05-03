@@ -163,13 +163,16 @@ node backend-server.js
 
 Tem que aparecer algo tipo:
 
-H2Reward backend rodando em http://localhost:3001
+H2Reward backend rodando em http://localhost:3001 ; http://localhost:3001/api/oracle; http://localhost:3001/api/token;
+
+http://localhost:3001/api/contracts; http://localhost:3001/api/account/0xaac477ff1eF0Ea5263965E0e2431A5Dd758723b3;
 
 Deixa esse terminal aberto.
 
 Agora testa em outro terminal:
 
 curl http://localhost:3001/api/health
+
 2) Abrir o frontend
 
 No VSCode:
@@ -181,7 +184,7 @@ Clica com botão direito em frontend-index.html.
 Clica em:
 Open with Live Server
 
-Ele vai abrir algo como:
+Ele vai abrir algo como: http://localhost:5500/
 
 http://127.0.0.1:5500/frontend-index.html
 
