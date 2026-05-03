@@ -1,0 +1,203 @@
+//frontend-index.html
+// H2Reward Mini Frontend - Final
+// Este é um frontend simples para interagir com os contratos do H2Reward. Ele inclui funcionalidades para conectar a MetaMask, 
+// mintar NFTs, fazer staking de tokens, criar propostas e votar. Além disso, há um botão para consultar o backend e exibir 
+// informações como saúde do sistema, dados do oráculo, status dos contratos e dados da conta do usuário.
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>H2Reward Mini Frontend - Final</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.1/dist/ethers.umd.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background:#0f172a; color:#e2e8f0; margin:0; padding:24px; }
+    .wrap { max-width:980px; margin:0 auto; }
+    .card { background:#111827; border:1px solid #334155; border-radius:16px; padding:16px; margin-bottom:16px; }
+    button { padding:10px 14px; border-radius:10px; border:none; cursor:pointer; margin-right:8px; background: #3b82f6; color: white; }
+    button:hover { background: #2563eb; }
+    input { width:100%; padding:10px; border-radius:10px; border:1px solid #475569; background:#020617; color:#e2e8f0; margin:8px 0 12px; box-sizing: border-box; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    pre { white-space:pre-wrap; background:#020617; padding:12px; border-radius:12px; font-size: 12px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>H2Reward Mini Frontend</h1>
+    <div class="card">
+      <button onclick="handleConnect()">Conectar MetaMask</button>
+      <button onclick="loadBackendData()">Consultar Backend</button>
+      <div id="wallet" style="margin-top: 10px; font-weight: bold;"></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Mint NFT</h3>
+        <input id="nftUri" value="ipfs://h2reward-metadata-v3" />
+        <button onclick="handleMint()">Mint NFT</button>
+      </div>
+
+      <div class="card">
+        <h3>Stake 1000 H2T</h3>
+        <button onclick="handleStake()">Approve + Stake</button>
+      </div>
+
+      <div class="card">
+        <h3>Criar proposta</h3>
+        <input id="proposalText" value="Proposta teste Sepolia" />
+        <button onclick="createProposal()">Criar proposta</button>
+      </div>
+
+      <div class="card">
+        <h3>Votar</h3>
+        <input id="proposalId" value="0" />
+        <button onclick="voteProposal()">Votar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Saída</h3>
+      <pre id="output">Aguardando ação...</pre>
+    </div>
+  </div>
+
+  <script>
+    // 1. CONFIGURAÇÕES
+    const SEPOLIA_CHAIN_ID = 11155111;
+    const ADDRESSES = {
+      token: "0x3Db435926635605D2f0bad1d050743958f8f52E9",
+      staking: "0x9B008559A973eBde06937317ce483a4678edD98F",
+      nft: "0xb820fbf6bF81ac6a14588Ca5bCBF80fc69eD6Ad2",
+      dao: "0xB4E32d322bbe4eA0041E9975745F263Ca12FaF79",
+    };
+
+    const ABIs = {
+      token: ["function approve(address spender, uint256 amount) returns (bool)"],
+      nft: ["function mint(address to, string memory uri)"],
+      dao: [
+        "function createProposal(string memory description)", 
+        "function vote(uint256 proposalId)",
+        "function hasVoted(uint256 proposalId, address voter) view returns (bool)"
+      ],
+      staking: ["function stake(uint256 amount)"]
+    };
+
+    let signer, provider;
+
+    // 2. UTILITÁRIOS
+    function log(msg) {
+      document.getElementById("output").textContent = typeof msg === "string" ? msg : JSON.stringify(msg, null, 2);
+    }
+
+    async function switchToSepolia() {
+      try {
+        await window.ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: `0x${SEPOLIA_CHAIN_ID.toString(16)}` }],
+        });
+      } catch (e) {
+        log("Erro ao trocar de rede: " + e.message);
+      }
+    }
+
+    async function handleConnect() {
+      try {
+        if (!window.ethereum) throw new Error("MetaMask não detectada.");
+        
+        provider = new ethers.BrowserProvider(window.ethereum);
+        let network = await provider.getNetwork();
+        
+        if (network.chainId !== BigInt(SEPOLIA_CHAIN_ID)) {
+          await switchToSepolia();
+          provider = new ethers.BrowserProvider(window.ethereum);
+        }
+
+        signer = await provider.getSigner();
+        const address = await signer.getAddress();
+        document.getElementById("wallet").textContent = "Carteira: " + address;
+        log("Conectado: " + address);
+      } catch (err) {
+        log("Erro na conexão: " + err.message);
+      }
+    }
+
+    // 3. FUNÇÕES DE CONTRATO
+    async function handleMint() {
+      if (!signer) return log("Conecte a carteira primeiro!");
+      try {
+        const nftContract = new ethers.Contract(ADDRESSES.nft, ABIs.nft, signer);
+        const uri = document.getElementById("nftUri").value;
+        const tx = await nftContract.mint(await signer.getAddress(), uri);
+        log("Processando Mint...");
+        await tx.wait();
+        log("Mint concluído! Tx: " + tx.hash);
+      } catch (e) { log("Erro no Mint: " + e.message); }
+    }
+
+    async function handleStake() {
+      if (!signer) return log("Conecte a carteira primeiro!");
+      try {
+        const token = new ethers.Contract(ADDRESSES.token, ABIs.token, signer);
+        const staking = new ethers.Contract(ADDRESSES.staking, ABIs.staking, signer);
+        const amount = ethers.parseUnits("1000", 18);
+        
+        log("Aprovando tokens...");
+        const tx1 = await token.approve(ADDRESSES.staking, amount);
+        await tx1.wait();
+        
+        log("Tokens aprovados. Stake em andamento...");
+        const tx2 = await staking.stake(amount);
+        await tx2.wait();
+        
+        log("Sucesso! Approve Tx: " + tx1.hash + "\nStake Tx: " + tx2.hash);
+      } catch (e) { log("Erro no Stake: " + e.message); }
+    }
+
+    async function createProposal() {
+      if (!signer) return log("Conecte a carteira primeiro!");
+      try {
+        const dao = new ethers.Contract(ADDRESSES.dao, ABIs.dao, signer);
+        const text = document.getElementById("proposalText").value;
+        const tx = await dao.createProposal(text);
+        log("Processando proposta...");
+        await tx.wait();
+        log("Proposta criada! Tx: " + tx.hash);
+      } catch (e) { log("Erro na proposta: " + e.message); }
+    }
+
+    async function voteProposal() {
+      if (!signer) return log("Conecte a carteira primeiro!");
+      try {
+        const dao = new ethers.Contract(ADDRESSES.dao, ABIs.dao, signer);
+        const id = document.getElementById("proposalId").value;
+        const userAddress = await signer.getAddress();
+        
+        log("Verificando se já votou...");
+        // Verifica antes de enviar
+        const jaVotou = await dao.hasVoted(id, userAddress);
+        if (jaVotou) {
+          log("Atenção: Você já registrou seu voto nesta proposta!");
+          return;
+        }
+
+        log("Processando voto...");
+        const tx = await dao.vote(id);
+        await tx.wait();
+        log("Voto computado com sucesso! Tx: " + tx.hash);
+      } catch (e) { log("Erro ao votar: " + e.message); }
+    }
+
+    async function loadBackendData() {
+        try {
+            const health = await fetch("http://localhost:3001/api/health").then(r => r.json());
+            const oracle = await fetch("http://localhost:3001/api/oracle").then(r => r.json());
+            const token = await fetch("http://localhost:3001/api/token").then(r => r.json());
+            const contracts = await fetch("http://localhost:3001/api/contracts").then(r => r.json());
+            const userAddress = await signer.getAddress(); // carteira da MetaMask
+            const accountData = await fetch(`http://localhost:3001/api/account/${userAddress}`).then(r => r.json());
+            log({ health, oracle, token, contracts, accountData });
+        } catch(e) { log("Erro ao consultar backend: " + e.message); }
+    }
+  </script>
+</body>
+</html>
